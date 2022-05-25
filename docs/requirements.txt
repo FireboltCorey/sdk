@@ -1,0 +1,9 @@
+pydantic[dotenv]
+httpx[http2]
+aiorwlock
+async-property
+readerwriterlock
+sqlparse
+appdirs
+appdirs-stubs
+cryptography
