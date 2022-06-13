@@ -36,23 +36,23 @@ Utils.exception
    ---------------------------
 
    .. automodule:: firebolt.common.urls
-   :members:
-   :undoc-members:
-   :show-inheritance:
+      :members:
+      :undoc-members:
+      :show-inheritance:
 
    Common.token\_storage
    -------------------------------------
 
    .. automodule:: firebolt.common.token_storage
-   :members:
-   :undoc-members:
-   :show-inheritance:
+      :members:
+      :undoc-members:
+      :show-inheritance:
 
    Common.util
    ---------------------------
 
-   .. automodule:: firebolt.common.util
-   :exclude-members: async_to_sync, cached_property, fix_url_schema, mixin_for, prune_dict
-   :members:
-   :undoc-members:
-   :show-inheritance:
+      .. automodule:: firebolt.common.util
+      :exclude-members: async_to_sync, cached_property, fix_url_schema, mixin_for, prune_dict
+      :members:
+      :undoc-members:
+      :show-inheritance:
