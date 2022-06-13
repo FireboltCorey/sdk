@@ -16,6 +16,9 @@ Async\_db.connect
 Async\_db.connection
 ------------------------------------
 
+.. note::
+   Do not use **connection** directly. Instead, use **connect** as shown above.
+
 .. automodule:: firebolt.async_db.connection
    :members:
    :inherited-members:
