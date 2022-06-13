@@ -9,7 +9,7 @@ Model.database
 
 .. automodule:: firebolt.model.database
    :members:
-   :exclude-members: DatabaseKey, Fieldmask
+   :exclude-members: DatabaseKey, FieldMask
    :undoc-members:
    :show-inheritance:
 
