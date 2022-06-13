@@ -16,6 +16,9 @@ Db.connect
 Db.connection
 -----------------------------
 
+.. note::
+   Do not use **connection** directly. Instead, use **connect** as shown above.
+
 .. automodule:: firebolt.db.connection
    :members:
    :inherited-members:
