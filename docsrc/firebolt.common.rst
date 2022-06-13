@@ -10,9 +10,9 @@ The common package contains settings parameters and error exceptions.
    --------------------------------
 
    .. automodule:: firebolt.common.exception
-   :members:
-   :undoc-members:
-   :show-inheritance:
+      :members:
+      :undoc-members:
+      :show-inheritance:
 
 Common.settings
 -------------------------------
@@ -51,7 +51,7 @@ Utils.exception
    Common.util
    ---------------------------
 
-      .. automodule:: firebolt.common.util
+   .. automodule:: firebolt.common.util
       :exclude-members: async_to_sync, cached_property, fix_url_schema, mixin_for, prune_dict
       :members:
       :undoc-members:
