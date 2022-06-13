@@ -18,6 +18,7 @@ Common.settings
 -------------------------------
 
 .. automodule:: firebolt.common.settings
+   :exclude-members: Config
    :members:
    :undoc-members:
    :show-inheritance:
