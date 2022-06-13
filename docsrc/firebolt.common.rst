@@ -18,7 +18,7 @@ Common.settings
 -------------------------------
 
 .. automodule:: firebolt.common.settings
-   :exclude-members: Config, access_token, account-name
+   :exclude-members: Config, access_token, account_name
    :members:
    :undoc-members:
    :show-inheritance:
