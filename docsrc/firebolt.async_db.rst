@@ -19,7 +19,7 @@ Async\_db.connection
 .. automodule:: firebolt.async_db.connection
    :members:
    :inherited-members:
-   :exclude-members: BaseConnection
+   :exclude-members: BaseConnection, async_connect_factory, OverriddenHttpBackend
    :undoc-members:
    :show-inheritance:
 
@@ -28,7 +28,7 @@ Async\_db.cursor
 
 .. automodule:: firebolt.async_db.cursor
    :members:
-   :exclude-members: BaseCursor
+   :exclude-members: BaseCursor, check_not_closed, check_query_executed
    :undoc-members:
    :show-inheritance:
 
