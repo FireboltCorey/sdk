@@ -4,10 +4,10 @@ Common
 
 The common package contains settings parameters and error exceptions.
 
-Utils.exceptions
+Utils.exception
 --------------------------------
 
-.. automodule:: firebolt.utils.exceptions
+.. automodule:: firebolt.utils.exception
    :members:
    :undoc-members:
    :show-inheritance:
