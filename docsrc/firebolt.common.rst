@@ -22,13 +22,13 @@ Common.settings
    :undoc-members:
    :show-inheritance:
 
-   Utils.exception
-   --------------------------------
+Utils.exception
+--------------------------------
 
-   .. automodule:: firebolt.utils.exception
-      :members:
-      :undoc-members:
-      :show-inheritance:
+.. automodule:: firebolt.utils.exception
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 ..
 
