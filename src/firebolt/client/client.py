@@ -1,5 +1,6 @@
 from typing import Any, Optional
 
+from anyio._core._eventloop import get_asynclib
 from async_property import async_cached_property  # type: ignore
 from httpx import URL
 from httpx import AsyncClient as HttpxAsyncClient
@@ -20,6 +21,15 @@ from firebolt.utils.util import (
     mixin_for,
 )
 
+# Explicitly import all available backend not get into
+# anyio race condition during backend import
+for backend in ("asyncio", "trio"):
+    try:
+        get_asynclib(backend)
+    except ModuleNotFoundError:
+        # Not all backends might be installed
+        pass
+
 FireboltClientMixinBase = mixin_for(HttpxClient)  # type: Any
 
 
@@ -38,7 +48,7 @@ class FireboltClientMixin(FireboltClientMixinBase):
         self._api_endpoint = URL(fix_url_schema(api_endpoint))
         super().__init__(*args, auth=auth, **kwargs)
 
-    def _build_auth(self, auth: AuthTypes) -> Optional[Auth]:
+    def _build_auth(self, auth: Optional[AuthTypes]) -> Optional[Auth]:
         """Create Auth object based on auth provided.
 
         Overrides ``httpx.Client._build_auth``

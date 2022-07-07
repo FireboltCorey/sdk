@@ -28,7 +28,7 @@ print(sys.path)
 # -- Project information -----------------------------------------------------
 
 project = "firebolt-python-sdk"
-copyright = "2022, Firebolt"
+copyright = "2021, Firebolt"
 author = "Firebolt"
 
 
