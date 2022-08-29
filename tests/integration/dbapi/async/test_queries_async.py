@@ -6,6 +6,61 @@ from pytest import mark, raises
 
 from firebolt.async_db import Connection, Cursor, DataError, OperationalError
 from firebolt.async_db._types import ColType, Column
+from firebolt.async_db.cursor import QueryStatus
+
+VALS_TO_INSERT = ",".join([f"({i},'{val}')" for (i, val) in enumerate(range(1, 360))])
+LONG_INSERT = f"INSERT INTO test_tbl VALUES {VALS_TO_INSERT}"
+CREATE_TEST_TABLE = (
+    "CREATE DIMENSION TABLE IF NOT EXISTS test_tbl (id int, name string)"
+)
+DROP_TEST_TABLE = "DROP TABLE IF EXISTS test_tbl"
+
+CREATE_EXTERNAL_TABLE = """CREATE EXTERNAL TABLE IF NOT EXISTS ex_lineitem (
+  l_orderkey              LONG,
+  l_partkey               LONG,
+  l_suppkey               LONG,
+  l_linenumber            INT,
+  l_quantity              LONG,
+  l_extendedprice         LONG,
+  l_discount              LONG,
+  l_tax                   LONG,
+  l_returnflag            TEXT,
+  l_linestatus            TEXT,
+  l_shipdate              TEXT,
+  l_commitdate            TEXT,
+  l_receiptdate           TEXT,
+  l_shipinstruct          TEXT,
+  l_shipmode              TEXT,
+  l_comment               TEXT
+)
+URL = 's3://firebolt-publishing-public/samples/tpc-h/parquet/lineitem/'
+OBJECT_PATTERN = '*.parquet'
+TYPE = (PARQUET);"""
+
+CREATE_FACT_TABLE = """CREATE FACT TABLE IF NOT EXISTS lineitem (
+-- In this example, these fact table columns
+-- map directly to the external table columns.
+  l_orderkey              LONG,
+  l_partkey               LONG,
+  l_suppkey               LONG,
+  l_linenumber            INT,
+  l_quantity              LONG,
+  l_extendedprice         LONG,
+  l_discount              LONG,
+  l_tax                   LONG,
+  l_returnflag            TEXT,
+  l_linestatus            TEXT,
+  l_shipdate              TEXT,
+  l_commitdate            TEXT,
+  l_receiptdate           TEXT,
+  l_shipinstruct          TEXT,
+  l_shipmode              TEXT,
+  l_comment               TEXT
+)
+PRIMARY INDEX
+  l_orderkey,
+  l_linenumber;
+"""
 
 
 def assert_deep_eq(got: Any, expected: Any, msg: str) -> bool:
@@ -16,7 +71,23 @@ def assert_deep_eq(got: Any, expected: Any, msg: str) -> bool:
     ), f"{msg}: {got}(got) != {expected}(expected)"
 
 
-@mark.asyncio
+async def status_loop(
+    query_id: str,
+    query: str,
+    cursor: Cursor,
+    start_status: QueryStatus = QueryStatus.NOT_READY,
+    final_status: QueryStatus = QueryStatus.ENDED_SUCCESSFULLY,
+) -> None:
+    status = await cursor.get_status(query_id)
+    # get_status() will return NOT_READY until it succeeds or fails.
+    while status == start_status or status == QueryStatus.NOT_READY:
+        # This only checks to see if a correct response is returned
+        status = await cursor.get_status(query_id)
+    assert (
+        status == final_status
+    ), f"Failed {query}. Got {status} rather than {final_status}."
+
+
 async def test_connect_engine_name(
     connection_engine_name: Connection,
     all_types_query: str,
@@ -32,7 +103,6 @@ async def test_connect_engine_name(
     )
 
 
-@mark.asyncio
 async def test_connect_no_engine(
     connection_no_engine: Connection,
     all_types_query: str,
@@ -48,14 +118,13 @@ async def test_connect_no_engine(
     )
 
 
-@mark.asyncio
 async def test_select(
     connection: Connection,
     all_types_query: str,
     all_types_query_description: List[Column],
     all_types_query_response: List[ColType],
 ) -> None:
-    """Select handles all data types properly"""
+    """Select handles all data types properly."""
     with connection.cursor() as c:
         assert (await c.execute("set firebolt_use_decimal = 1")) == -1
         assert await c.execute(all_types_query) == 1, "Invalid row count returned"
@@ -83,12 +152,11 @@ async def test_select(
         )
 
 
-@mark.asyncio
 @mark.timeout(timeout=400)
 async def test_long_query(
     connection: Connection,
 ) -> None:
-    """AWS ALB TCP timeout set to 350, make sure we handle the keepalive correctly"""
+    """AWS ALB TCP timeout set to 350; make sure we handle the keepalive correctly."""
     with connection.cursor() as c:
         await c.execute(
             "SET advanced_mode = 1; SET use_standard_sql = 0;"
@@ -100,21 +168,20 @@ async def test_long_query(
         assert len(data) == 360, "Invalid data size returned by fetchall"
 
 
-@mark.asyncio
 async def test_drop_create(
     connection: Connection, create_drop_description: List[Column]
 ) -> None:
     """Create and drop table/index queries are handled properly."""
 
     async def test_query(c: Cursor, query: str) -> None:
-        assert await c.execute(query) == 1, "Invalid row count returned."
-        assert c.rowcount == 1, "Invalid rowcount value."
+        assert await c.execute(query) == 1, "Invalid row count returned"
+        assert c.rowcount == 1, "Invalid rowcount value"
         assert_deep_eq(
             c.description,
             create_drop_description,
-            "Invalid create table query description.",
+            "Invalid create table query description",
         )
-        assert len(await c.fetchall()) == 1, "Invalid data returned."
+        assert len(await c.fetchall()) == 1, "Invalid data returned"
 
     """Create table query is handled properly"""
     with connection.cursor() as c:
@@ -168,14 +235,13 @@ async def test_drop_create(
         await test_query(c, "DROP TABLE IF EXISTS test_drop_create_async_dim")
 
 
-@mark.asyncio
 async def test_insert(connection: Connection) -> None:
     """Insert and delete queries are handled properly."""
 
     async def test_empty_query(c: Cursor, query: str) -> None:
-        assert await c.execute(query) == -1, "Invalid row count returned."
-        assert c.rowcount == -1, "Invalid rowcount value."
-        assert c.description is None, "Invalid description."
+        assert await c.execute(query) == -1, "Invalid row count returned"
+        assert c.rowcount == -1, "Invalid rowcount value"
+        assert c.description is None, "Invalid description"
         with raises(DataError):
             await c.fetchone()
 
@@ -203,7 +269,7 @@ async def test_insert(connection: Connection) -> None:
                 "SELECT * FROM test_insert_async_tb ORDER BY test_insert_async_tb.id"
             )
             == 1
-        ), "Invalid data length in table after insert."
+        ), "Invalid data length in table after insert"
 
         assert_deep_eq(
             await c.fetchall(),
@@ -218,13 +284,12 @@ async def test_insert(connection: Connection) -> None:
                     [1, 2, 3],
                 ],
             ],
-            "Invalid data in table after insert.",
+            "Invalid data in table after insert",
         )
 
 
-@mark.asyncio
 async def test_parameterized_query(connection: Connection) -> None:
-    """Query parameters are handled properly"""
+    """Query parameters are handled properly."""
 
     async def test_empty_query(c: Cursor, query: str, params: tuple) -> None:
         assert await c.execute(query, params) == -1, "Invalid row count returned"
@@ -284,7 +349,6 @@ async def test_parameterized_query(connection: Connection) -> None:
         )
 
 
-@mark.asyncio
 async def test_multi_statement_query(connection: Connection) -> None:
     """Query parameters are handled properly"""
 
@@ -345,11 +409,70 @@ async def test_multi_statement_query(connection: Connection) -> None:
         assert await c.nextset() is None
 
 
-@mark.asyncio
 async def test_set_invalid_parameter(connection: Connection):
     with connection.cursor() as c:
         assert len(c._set_parameters) == 0
         with raises(OperationalError):
-            await c.execute("set some_invalid_parameter = 1")
+            await c.execute("SET some_invalid_parameter = 1")
 
         assert len(c._set_parameters) == 0
+
+
+async def test_server_side_async_execution_query(connection: Connection) -> None:
+    """Make an sql query and receive an id back."""
+    with connection.cursor() as c:
+        query_id = await c.execute("SELECT 1", [], async_execution=True)
+    assert (
+        type(query_id) is str and query_id
+    ), "Invalid query id was returned from server-side async query."
+
+
+async def test_server_side_async_execution_cancel(
+    create_drop_test_table_setup_teardown_async,
+) -> None:
+    """Test cancel."""
+    c = create_drop_test_table_setup_teardown_async
+    query_id = await c.execute(
+        LONG_INSERT,
+        async_execution=True,
+    )
+    # Cancel, then check that status is cancelled.
+    await c.cancel(query_id)
+    await status_loop(
+        query_id,
+        "cancel",
+        c,
+        final_status=QueryStatus.CANCELED_EXECUTION,
+    )
+
+
+async def test_server_side_async_execution_get_status(
+    create_drop_test_table_setup_teardown_async,
+) -> None:
+    """
+    Test get_status(). Test for three ending conditions: PARSE_ERROR,
+    STARTED_EXECUTION, ENDED_EXECUTION.
+    """
+    c = create_drop_test_table_setup_teardown_async
+    # A long insert so we can check for STARTED_EXECUTION.
+    query_id = await c.execute(
+        LONG_INSERT,
+        async_execution=True,
+    )
+    await status_loop(
+        query_id, "get status", c, final_status=QueryStatus.STARTED_EXECUTION
+    )
+    # Now a check for ENDED_SUCCESSFULLY status of last query.
+    await status_loop(
+        query_id,
+        "get status",
+        c,
+        start_status=QueryStatus.STARTED_EXECUTION,
+        final_status=QueryStatus.ENDED_SUCCESSFULLY,
+    )
+    # Now, check for PARSE_ERROR. '1' will fail, as id is int.
+    query_id = await c.execute(
+        """INSERT INTO test_tbl ('1', 'a')""",
+        async_execution=True,
+    )
+    await status_loop(query_id, "get status", c, final_status=QueryStatus.PARSE_ERROR)

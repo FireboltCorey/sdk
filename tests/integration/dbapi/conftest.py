@@ -7,16 +7,39 @@ from pytest import fixture
 
 from firebolt.async_db._types import ColType
 from firebolt.async_db.cursor import Column
-from firebolt.db import ARRAY, DATETIME64, DECIMAL
+from firebolt.db import ARRAY, DATETIME64, DECIMAL, Connection
 
 LOGGER = getLogger(__name__)
+
+VALS_TO_INSERT = ",".join([f"({i},'{val}')" for (i, val) in enumerate(range(1, 360))])
+LONG_INSERT = f"INSERT INTO test_tbl VALUES {VALS_TO_INSERT}"
+CREATE_TEST_TABLE = (
+    "CREATE DIMENSION TABLE IF NOT EXISTS test_tbl (id int, name string)"
+)
+DROP_TEST_TABLE = "DROP TABLE IF EXISTS test_tbl"
+
+
+@fixture
+def create_drop_test_table_setup_teardown(connection: Connection) -> None:
+    with connection.cursor() as c:
+        c.execute(CREATE_TEST_TABLE)
+        yield c
+        c.execute(DROP_TEST_TABLE)
+
+
+@fixture
+async def create_drop_test_table_setup_teardown_async(connection: Connection) -> None:
+    with connection.cursor() as c:
+        await c.execute(CREATE_TEST_TABLE)
+        yield c
+        await c.execute(DROP_TEST_TABLE)
 
 
 @fixture
 def all_types_query() -> str:
     return (
         "select 1 as uint8, "
-        "-1 as int8, "
+        "-1 as int_8, "  # int8 is a reserved keyword
         "257 as uint16, "
         "-257 as int16, "
         "80000 as uint32, "
@@ -31,7 +54,7 @@ def all_types_query() -> str:
         "CAST('2019-07-31 01:01:01' AS DATETIME) as \"datetime\", "
         "CAST('2019-07-31 01:01:01.1234' AS TIMESTAMP_EXT(4)) as \"datetime64\", "
         'true as "bool",'
-        '[1,2,3,4] as "array", cast(1231232.123459999990457054844258706536 as '
+        "[1,2,3,4] as \"array\", cast('1231232.123459999990457054844258706536' as "
         'decimal(38,30)) as "decimal", '
         "cast(null as  int) as nullable"
     )
@@ -41,7 +64,7 @@ def all_types_query() -> str:
 def all_types_query_description() -> List[Column]:
     return [
         Column("uint8", int, None, None, None, None, None),
-        Column("int8", int, None, None, None, None, None),
+        Column("int_8", int, None, None, None, None, None),
         Column("uint16", int, None, None, None, None, None),
         Column("int16", int, None, None, None, None, None),
         Column("uint32", int, None, None, None, None, None),

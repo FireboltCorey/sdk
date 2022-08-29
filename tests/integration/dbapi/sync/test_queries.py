@@ -6,6 +6,7 @@ from typing import Any, List
 from pytest import mark, raises
 
 from firebolt.async_db._types import ColType, Column
+from firebolt.async_db.cursor import QueryStatus
 from firebolt.client.auth import UsernamePassword
 from firebolt.db import (
     Connection,
@@ -15,6 +16,13 @@ from firebolt.db import (
     connect,
 )
 
+VALS_TO_INSERT = ",".join([f"({i},'{val}')" for (i, val) in enumerate(range(1, 360))])
+LONG_INSERT = f"INSERT INTO test_tbl VALUES {VALS_TO_INSERT}"
+CREATE_TEST_TABLE = (
+    "CREATE DIMENSION TABLE IF NOT EXISTS test_tbl (id int, name string)"
+)
+DROP_TEST_TABLE = "DROP TABLE IF EXISTS test_tbl"
+
 
 def assert_deep_eq(got: Any, expected: Any, msg: str) -> bool:
     if type(got) == list and type(expected) == list:
@@ -22,6 +30,23 @@ def assert_deep_eq(got: Any, expected: Any, msg: str) -> bool:
     assert (
         type(got) == type(expected) and got == expected
     ), f"{msg}: {got}(got) != {expected}(expected)"
+
+
+def status_loop(
+    query_id: str,
+    query: str,
+    cursor: Cursor,
+    start_status: QueryStatus = QueryStatus.NOT_READY,
+    final_status: QueryStatus = QueryStatus.ENDED_SUCCESSFULLY,
+) -> None:
+    status = cursor.get_status(query_id)
+    # get_status() will return NOT_READY until it succeeds or fails.
+    while status == start_status or status == QueryStatus.NOT_READY:
+        # This only checks to see if a correct response is returned
+        status = cursor.get_status(query_id)
+    assert (
+        status == final_status
+    ), f"Failed {query}. Got {status} rather than {final_status}."
 
 
 def test_connect_engine_name(
@@ -60,7 +85,7 @@ def test_select(
     all_types_query_description: List[Column],
     all_types_query_response: List[ColType],
 ) -> None:
-    """Select handles all data types properly"""
+    """Select handles all data types properly."""
     with connection.cursor() as c:
         assert c.execute("set firebolt_use_decimal = 1") == -1
         assert c.execute(all_types_query) == 1, "Invalid row count returned"
@@ -90,11 +115,12 @@ def test_select(
 def test_long_query(
     connection: Connection,
 ) -> None:
-    """AWS ALB TCP timeout set to 350, make sure we handle the keepalive correctly"""
+    """AWS ALB TCP timeout set to 350, make sure we handle the keepalive correctly."""
     with connection.cursor() as c:
         c.execute(
-            "SET advanced_mode = 1; SET use_standard_sql = 0;"
-            "SELECT sleepEachRow(1) from numbers(360)",
+            "SET advanced_mode=1;"
+            "SET use_standard_sql=0;"
+            "SELECT sleepEachRow(1) FROM numbers(360)",
         )
         c.nextset()
         c.nextset()
@@ -218,7 +244,7 @@ def test_insert(connection: Connection) -> None:
 
 
 def test_parameterized_query(connection: Connection) -> None:
-    """Query parameters are handled properly"""
+    """Query parameters are handled properly."""
 
     def test_empty_query(c: Cursor, query: str, params: tuple) -> None:
         assert c.execute(query, params) == -1, "Invalid row count returned"
@@ -388,3 +414,60 @@ def test_anyio_backend_import_issue(
     [t.start() for t in threads]
     [t.join() for t in threads]
     assert len(exceptions) == 0, exceptions
+
+
+def test_server_side_async_execution_query(connection: Connection) -> None:
+    """Make an sql query and receive an id back."""
+    with connection.cursor() as c:
+        query_id = c.execute("SELECT 1", [], async_execution=True)
+    assert (
+        type(query_id) is str and query_id
+    ), "Invalid query id was returned from server-side async query."
+
+
+def test_server_side_async_execution_cancel(
+    create_drop_test_table_setup_teardown,
+) -> None:
+    """Test cancel."""
+    c = create_drop_test_table_setup_teardown
+    query_id = c.execute(
+        LONG_INSERT,
+        async_execution=True,
+    )
+    # Cancel, then check that status is cancelled.
+    c.cancel(query_id)
+    status_loop(
+        query_id,
+        "cancel",
+        c,
+        final_status=QueryStatus.CANCELED_EXECUTION,
+    )
+
+
+def test_server_side_async_execution_get_status(
+    create_drop_test_table_setup_teardown,
+) -> None:
+    """
+    Test get_status(). Test for three ending conditions: PARSE_ERROR,
+    STARTED_EXECUTION, ENDED_EXECUTION.
+    """
+    c = create_drop_test_table_setup_teardown
+    query_id = c.execute(
+        LONG_INSERT,
+        async_execution=True,
+    )
+    status_loop(query_id, "get status", c, final_status=QueryStatus.STARTED_EXECUTION)
+    # Now a check for ENDED_SUCCESSFULLY status of last query.
+    status_loop(
+        query_id,
+        "get status",
+        c,
+        start_status=QueryStatus.STARTED_EXECUTION,
+        final_status=QueryStatus.ENDED_SUCCESSFULLY,
+    )
+    # Now, check for PARSE_ERROR. '1' will fail, as id is int.
+    query_id = c.execute(
+        """INSERT INTO test_tbl ('1', 'a')""",
+        async_execution=True,
+    )
+    status_loop(query_id, "get status", c, final_status=QueryStatus.PARSE_ERROR)
